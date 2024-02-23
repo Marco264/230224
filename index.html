@@ -1,0 +1,273 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8">
+        <meta http-equiv="X-UA-Compatible" content="IE=edge">
+        <meta name="viewport" content="initial-scale=1,user-scalable=no,maximum-scale=1,width=device-width">
+        <meta name="mobile-web-app-capable" content="yes">
+        <meta name="apple-mobile-web-app-capable" content="yes">
+        <link rel="stylesheet" href="css/leaflet.css">
+        <link rel="stylesheet" href="css/L.Control.Locate.min.css">
+        <link rel="stylesheet" href="css/qgis2web.css">
+        <link rel="stylesheet" href="css/fontawesome-all.min.css">
+        <link rel="stylesheet" href="css/leaflet-control-geocoder.Geocoder.css">
+        <link rel="stylesheet" href="css/leaflet-measure.css">
+        <style>
+        #map {
+            width: 1467px;
+            height: 852px;
+        }
+
+        dialog {
+            border: 1px solid #000000;
+            padding: 10px;
+            position: relative; /* Añadido para ajustar el z-index */
+            z-index: 2; /* Añadido para asegurar que esté encima del contenido */
+            background: rgba(31, 23, 23, 0.767); /* Ajusta el último valor para cambiar la opacidad */
+            color: white; /* Añadido para mejorar la visibilidad del texto */
+            border-radius: 10px; /* Añadido para mejorar la visibilidad del texto */
+        }
+        body.modal-open {
+            overflow: hidden;
+        }
+        </style>
+        <title>USO INTERNO_DEM planeamiento_beta</title>
+    </head>
+    <body>
+        <body class="modal-open">
+            <div id="map"></div>
+                </div>
+                <dialog id="passwordDialog">
+                    <label for="password">Contraseña:</label>
+                    <input type="password" id="password" name="password" required>
+                    <button id="submitBtn">Ingresar</button>
+        </div>
+        <div id="info" style="
+            position: fixed;
+            bottom: 0;
+            right: 0;
+            padding: 10px;
+            background: rgba(31, 23, 23, 0.767);
+            border-radius: 10px;
+            font-size: 14px;
+            line-height: 1.5;
+            color: rgb(255, 255, 255);
+        ">
+        </div>
+
+        <div class="map-info">
+            <h2>Mapa Topografico</h2>
+            <p>Uso interno - raster DEM 5m IGN</p>
+        </div>
+        <script src="js/qgis2web_expressions.js"></script>
+        <script src="js/leaflet.js"></script>
+        <script src="https://unpkg.com/geotiff"></script>
+        <script src="https://unpkg.com/plotty"></script>
+        <script src="https://unpkg.com/leaflet-geotiff-2"></script>
+        <script src="js/L.Control.Locate.min.js"></script>
+        <script src="js/leaflet.rotatedMarker.js"></script>
+        <script src="js/leaflet.pattern.js"></script>
+        <script src="js/leaflet-hash.js"></script>
+        <script src="js/Autolinker.min.js"></script>
+        <script src="js/rbush.min.js"></script>
+        <script src="js/labelgun.min.js"></script>
+        <script src="js/labels.js"></script>
+        <script src="js/leaflet-control-geocoder.Geocoder.js"></script>
+        <script src="js/leaflet-measure.js"></script>
+        <script src="data/limiteslocalidadescopiar_1.js"></script>
+        <script>
+        
+        document.addEventListener("DOMContentLoaded", function() {
+            // Función para verificar la contraseña
+            function verificarContraseña() {
+                var passwordInput = document.getElementById("password");
+                var password = passwordInput.value;
+
+                if (password !== "Carpinchos2024") {
+                    alert("Contraseña incorrecta. Inténtelo de nuevo.");
+                    // Aquí puedes redirigir a una página diferente o realizar otras acciones si la contraseña es incorrecta.
+                    // Por ejemplo, puedes deshabilitar la visualización del mapa o redirigir a una página de error.
+                } else {
+                    // La contraseña es correcta, puedes continuar con la carga del mapa o realizar otras acciones.
+                    // Por ejemplo:
+                    // window.location.href = "mi_visor_web.html"; // Cambia esto al nombre de tu archivo principal
+                    document.getElementById("passwordDialog").close(); // Cerrar el diálogo modal
+                    document.body.classList.remove("modal-open"); // Restaurar el desplazamiento del cuerpo
+                }
+            }
+            // Llama a la función verificarContraseña cuando se hace clic en el botón
+            document.getElementById("submitBtn").addEventListener("click", function() {
+                verificarContraseña();
+            });
+            // Mostrar el diálogo modal después de que la página se haya cargado
+            document.getElementById("passwordDialog").showModal();
+        });
+        var highlightLayer;
+        function highlightFeature(e) {
+            highlightLayer = e.target;
+            if (e.target.feature.geometry.type === 'LineString') {
+              highlightLayer.setStyle({
+                color: '#ffff00',
+              });
+            } else {
+              highlightLayer.setStyle({
+                fillColor: '#ffff00',
+                fillOpacity: 1
+              });
+            }
+        }
+        var map = L.map('map', {
+            zoomControl:true, maxZoom:28, minZoom:1
+        })
+        // Crear un objeto para almacenar las capas de mapas base
+        var mapBaseLayers = {
+            "Google Hybrid": L.tileLayer('https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}', {
+                attribution: '&copy; <a href="https://www.google.com/maps/">2024 Google Inc.</a> Todos los derechos reservados'
+            }),
+            "OpenStreetMap": L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+            }),
+            "Google Satellite": L.tileLayer('http://www.google.cn/maps/vt?lyrs=s@189&gl=cn&x={x}&y={y}&z={z}', {
+                attribution: '&copy; <a href="https://www.google.com/maps/">2024 Google Inc.</a> Todos los derechos reservados'
+            })
+        };
+        // Agregar control de capas para permitir que los usuarios seleccionen la capa de mapa base
+        L.control.layers(mapBaseLayers).addTo(map);
+        // Agregar control de hash para permitir enlaces directos a ubicaciones y configuración de capas
+        var hash = new L.Hash(map);
+        map.attributionControl.setPrefix('<a href="https://github.com/tomchadwin/qgis2web" target="_blank">qgis2web</a> &middot; <a href="https://leafletjs.com" title="A JS library for interactive maps">Leaflet</a> &middot; <a href="https://qgis.org">QGIS</a>');
+        var autolinker = new Autolinker({truncate: {length: 30, location: 'smart'}});
+        function removeEmptyRowsFromPopupContent(content, feature) {
+         var tempDiv = document.createElement('div');
+         tempDiv.innerHTML = content;
+         var rows = tempDiv.querySelectorAll('tr');
+         for (var i = 0; i < rows.length; i++) {
+             var td = rows[i].querySelector('td.visible-with-data');
+             var key = td ? td.id : '';
+             if (td && td.classList.contains('visible-with-data') && feature.properties[key] == null) {
+                 rows[i].parentNode.removeChild(rows[i]);
+             }
+         }
+         return tempDiv.innerHTML;
+        }
+        document.querySelector(".leaflet-popup-pane").addEventListener("load", function(event) {
+          var tagName = event.target.tagName,
+            popup = map._popup;
+          // Also check if flag is already set.
+          if (tagName === "IMG" && popup && !popup._updated) {
+            popup._updated = true; // Set flag to prevent looping.
+            popup.update();
+          }
+        }, true);
+        
+        L.control.locate({locateOptions: {maxZoom: 19}}).addTo(map);
+        var measureControl = new L.Control.Measure({
+            position: 'topleft',
+            primaryLengthUnit: 'meters',
+            secondaryLengthUnit: 'kilometers',
+            primaryAreaUnit: 'sqmeters',
+            secondaryAreaUnit: 'hectares'
+        });
+        measureControl.addTo(map);
+        document.getElementsByClassName('leaflet-control-measure-toggle')[0]
+        .innerHTML = '';
+        document.getElementsByClassName('leaflet-control-measure-toggle')[0]
+        .className += ' fas fa-ruler';
+        var bounds_group = new L.featureGroup([]);
+        function setBounds() {
+            if (bounds_group.getLayers().length) {
+                map.fitBounds(bounds_group.getBounds());
+            }
+        }
+        const url = "https://dem-tigre-ign.s3.sa-east-1.amazonaws.com/DEM5m_IGN.tif"; // Reemplaza esto con la URL de tu archivo GeoTIFF
+        const options = {
+            displayMin: -29,  // El valor mínimo que se mostrará
+            displayMax: 49,  // El valor máximo que se mostrará
+            clampLow: true,  // Si es true, los valores por debajo de displayMin se ajustarán a displayMin
+            clampHigh: true,  // Si es true, los valores por encima de displayMax se ajustarán a displayMax
+            colorScale: "viridis",  // La escala de colores que se utilizará para representar los datos
+            useWorker: false,
+            band: 0,
+            opacity: 0.7,
+            clearBeforeMove: false,
+        }; 
+        const renderer = L.LeafletGeotiff.plotty(options);
+        map.on('click', function(e) {
+            var value = layer.getValueAtLatLng(e.latlng.lat, e.latlng.lng);
+            // Ahora puedes mostrar el valor en el div en lugar de usar alert
+            document.getElementById('info').textContent = 'Cota: ' + value;
+        });
+
+
+
+        var layer = L.leafletGeotiff(url, options).addTo(map);
+        
+        var overlayMaps = {
+        "GeoTIFF": layer
+        };
+
+        L.control.layers(null, overlayMaps).addTo(map);
+
+        function pop_limiteslocalidadescopiar_1(feature, layer) {
+            layer.on({
+                mouseout: function(e) {
+                    for (i in e.target._eventParents) {
+                        e.target._eventParents[i].resetStyle(e.target);
+                    }
+                },
+                mouseover: highlightFeature,
+            });
+            var popupContent = '<table>\
+                    <tr>\
+                        <td class="visible-with-data" id="name"colspan="2"><strong>name</strong><br />' + (feature.properties['name'] !== null ? autolinker.link(feature.properties['name'].toLocaleString()) : '') + '</td>\
+                    </tr>\
+                </table>';
+            layer.bindPopup(popupContent, {maxHeight: 400});
+            var popup = layer.getPopup();
+            var content = popup.getContent();
+            var updatedContent = removeEmptyRowsFromPopupContent(content, feature);
+            popup.setContent(updatedContent);
+        }
+        function style_limiteslocalidadescopiar_1_0() {
+            return {
+                pane: 'pane_limiteslocalidadescopiar_1',
+                opacity: 1,
+                color: 'rgba(255,35,35,1.0)',
+                dashArray: '10.0,2.0,4.0,2.0,4.0,2.0',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 2.0, 
+                fillOpacity: 0,
+                interactive: false,
+            }
+        }
+        map.createPane('pane_limiteslocalidadescopiar_1');
+        map.getPane('pane_limiteslocalidadescopiar_1').style.zIndex = 401;
+        map.getPane('pane_limiteslocalidadescopiar_1').style['mix-blend-mode'] = 'normal';
+        var layer_limiteslocalidadescopiar_1 = new L.geoJson(json_limiteslocalidadescopiar_1, {
+            attribution: '',
+            interactive: false,
+            dataVar: 'json_limiteslocalidadescopiar_1',
+            layerName: 'layer_limiteslocalidadescopiar_1',
+            pane: 'pane_limiteslocalidadescopiar_1',
+            onEachFeature: pop_limiteslocalidadescopiar_1,
+            style: style_limiteslocalidadescopiar_1_0,
+        });
+        bounds_group.addLayer(layer_limiteslocalidadescopiar_1);
+        map.addLayer(layer_limiteslocalidadescopiar_1);
+        var osmGeocoder = new L.Control.Geocoder({
+            collapsed: true,
+            position: 'topleft',
+            text: 'Search',
+            title: 'Testing'
+        }).addTo(map);
+        document.getElementsByClassName('leaflet-control-geocoder-icon')[0]
+        .className += ' fa fa-search';
+        document.getElementsByClassName('leaflet-control-geocoder-icon')[0]
+        .title += 'Search for a place';
+        var baseMaps = {};
+        L.control.layers(baseMaps,{'<img src="legend/limiteslocalidadescopiar_1.png" /> limites localidades copiar': layer_limiteslocalidadescopiar_1,}).addTo(map);
+        setBounds();
+        </script>
+    </body>
+</html>
