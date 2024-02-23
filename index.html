@@ -178,19 +178,21 @@
                 map.fitBounds(bounds_group.getBounds());
             }
         }
-        const url = "https://dem-tigre-ign.s3.sa-east-1.amazonaws.com/DEM5m_IGN.tif"; // Reemplaza esto con la URL de tu archivo GeoTIFF
-        const options = {
-            displayMin: -29,  // El valor mínimo que se mostrará
-            displayMax: 49,  // El valor máximo que se mostrará
-            clampLow: true,  // Si es true, los valores por debajo de displayMin se ajustarán a displayMin
-            clampHigh: true,  // Si es true, los valores por encima de displayMax se ajustarán a displayMax
-            colorScale: "viridis",  // La escala de colores que se utilizará para representar los datos
+        var url = "https://dem-tigre-ign.s3.sa-east-1.amazonaws.com/DEM5m_IGN.tif"; // Reemplaza esto con la URL de tu archivo GeoTIFF
+        var options = {
+            renderer: L.LeafletGeotiff.plotty({
+                displayMin: -29,  // El valor mínimo que se mostrará
+                displayMax: 49,  // El valor máximo que se mostrará
+                clampLow: true,  // Si es true, los valores por debajo de displayMin se ajustarán a displayMin
+                clampHigh: true,  // Si es true, los valores por encima de displayMax se ajustarán a displayMax
+                colorScale: "viridis",  // La escala de colores que se utilizará para representar los datos
+            }),
             useWorker: false,
             band: 0,
             opacity: 0.7,
             clearBeforeMove: false,
         }; 
-        const renderer = L.LeafletGeotiff.plotty(options);
+        var layer = L.leafletGeotiff(url, options).addTo(map);
         map.on('click', function(e) {
             var value = layer.getValueAtLatLng(e.latlng.lat, e.latlng.lng);
             // Ahora puedes mostrar el valor en el div en lugar de usar alert
